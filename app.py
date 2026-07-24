@@ -80,28 +80,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. GEN AI ENGINE: Helper function to prompt Google Gemini. It tries the traditional SDK first
-# and falls back to the newer 'google-genai' SDK if the first one fails, ensuring high reliability.
-def generate_gemini_explanation(api_key, prompt):
-    try:
-        # Method A: Try google-generativeai client
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e1:
-        try:
-            # Method B: Try google-genai client
-            from google import genai
-            client = genai.Client(api_key=api_key)
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt,
-            )
-            return response.text
-        except Exception as e2:
-            return f"Error invoking Gemini API:\n\n* google.generativeai error: {e1}\n* google.genai error: {e2}\n\nPlease check your key and make sure you have internet access."
+
 
 # 4. DATA LOADERS: Cache resource loading so we don't reload assets on every slider movement or selectbox change.
 @st.cache_resource
@@ -128,16 +107,7 @@ sample_data = load_sample_data()
 st.sidebar.markdown("## 🛡️ Control Center")
 st.sidebar.info("This AI dashboard helps detect fraudulent credit card transactions and translates statistical anomalies into natural language explanations.")
 
-# User inputs their API key here
-api_key_input = st.sidebar.text_input(
-    "🔑 Google Gemini API Key",
-    value=os.getenv("GEMINI_API_KEY", ""),
-    type="password",
-    help="Enter your Gemini API key to enable Gen AI explanations. Alternatively, set the GEMINI_API_KEY environment variable."
-)
 
-# Use entered key or env variable key
-gemini_key = api_key_input if api_key_input else os.getenv("GEMINI_API_KEY", "")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 📊 Dataset Overview")
@@ -147,7 +117,7 @@ st.sidebar.write("**Fraudulent (Class 1):** 492 (0.17%)")
 
 # 6. HEADER DESIGNS
 st.markdown("<div class='main-title'>FraudShield Pro</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Next-Generation Real-Time Credit Card Fraud Analytics & Generative Explanations</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Next-Generation Real-Time Credit Card Fraud Analytics</div>", unsafe_allow_html=True)
 
 # Guard clause if model files do not exist
 if assets is None:
@@ -302,8 +272,8 @@ with tab_predict:
                 'description': f"Feature {col} is significantly {direction} than normal (Z-score: {z:.2f}). Legitimate mean is {m_legit:.2f}, while Fraud mean is {m_fraud:.2f}."
             })
             
-        # Draw charts and call AI model in two columns
-        col_anom, col_genai = st.columns([1, 1.2])
+        # Draw charts and details in two columns
+        col_anom, col_details = st.columns([1, 1.2])
         
         with col_anom:
             st.markdown("### Top Feature Anomalies")
@@ -329,42 +299,11 @@ with tab_predict:
             fig.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig, use_container_width=True)
             
-        with col_genai:
-            st.markdown("### 🤖 Generative AI Analysis")
-            
-            # Construct natural language prompt describing transaction context and outliers
-            prompt = f"""
-You are an expert financial fraud investigator. You are reviewing a transaction that has been flagged as suspicious by our machine learning model with a fraud probability of {fraud_prob:.1%}.
-
-The system has extracted the following key statistical anomalies for this transaction compared to typical legitimate (clean) transactions:
-{chr(10).join(['- ' + item['description'] for item in anomalies_list])}
-
-Transaction Amount: ${selected_row['Amount']:.2f}
-Transaction Time (relative to dataset start): {selected_row['Time']} seconds
-
-Please write a professional, natural-language explanation detailing why this transaction is highly indicative of fraud. 
-Explain how these specific V-features (which represent latent behavioral dimensions of transactions, such as location, terminal type, merchant categories, etc.) deviate from clean transactions and fit the profile of known fraudulent patterns.
-Structure the report as follows:
-1. **Summary**: A high-level assessment of the risk.
-2. **Behavioral Anomalies**: Discussing the specific feature deviations in plain business language.
-3. **Investigation Action Recommendation**: Tell the analyst what steps to take (e.g. freeze card, contact customer).
-
-Keep it concise, professional, and clear. Avoid sounding too technical about PCA, explain the deviations as security indicators instead.
-"""
-            
-            # Call Gemini API if key is entered
-            if gemini_key:
-                st.write("Generative AI is analyzing the transaction anomalies...")
-                with st.spinner("Calling Gemini API..."):
-                    explanation = generate_gemini_explanation(gemini_key, prompt)
-                st.markdown(explanation)
-            else:
-                # Show rule-based fallback details if key is missing
-                st.warning("⚠️ Gemini API Key not provided. Enter a key in the sidebar to generate AI risk summaries.")
-                st.markdown("**Local Risk Summary (Rule-Based Fallback):**")
-                st.write("The transaction exhibits anomalous behavior on multiple critical dimensions. The primary drivers are:")
-                for item in anomalies_list:
-                    st.write(f"- **{item['feature']}**: Z-score of `{item['z_score']:.2f}` deviates significantly from the typical clean profile.")
+        with col_details:
+            st.markdown("### 📊 Statistical Profiling & Explanation")
+            st.write("Below are detailed statistical indicators comparing this transaction to normal, legitimate transaction patterns:")
+            for item in anomalies_list:
+                st.markdown(f"- **{item['feature']}**: {item['description']}")
 
 # ----------------- TAB 2: EXPLORATORY DATA ANALYSIS (EDA) -----------------
 with tab_eda:
